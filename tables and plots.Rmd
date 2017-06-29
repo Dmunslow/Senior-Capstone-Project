@@ -1,0 +1,189 @@
+---
+title: "Presentation tables"
+author: "Duncan Munslow"
+date: "May 2, 2017"
+output: pdf_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stargazer)
+library(xlsx)
+library(plm)
+library(dplyr)
+library(reshape2)
+library(tidyr)
+library(ggplot2)
+```
+
+This document produces a PDF with the stargazer regression tables and ggplot2 plots which are used in my senior capstone research paper.
+I am currently working to produce a fully reproducible version of this document, which will compile all data in the "Source Data.xlsx" file, and produce these plots.
+
+```{r readData, echo = FALSE, cache=TRUE, message=FALSE, warning=FALSE, results=FALSE, comment=FALSE}
+fullDataRaw.data <- read.xlsx("./Source Data.xlsx", sheetIndex = 1)
+
+allRaceReg.data <-fullDataRaw.data
+allRaceReg.data$id <- group_indices(allRaceReg.data, st_code, race)
+
+fullDataRaw.white <- filter(fullDataRaw.data, race == "White")
+fullDataRaw.black <- filter(fullDataRaw.data, race == "Black")
+
+plm.allraces.DC.reg <- plm(drugcrime_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + 
+                      colorado_legal+ factor(race), data = allRaceReg.data,
+                      index = c("id", "year"), model = "within", effect = "twoways")
+plm.allraces.HC.reg <- plm(heroincoke_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + 
+                               colorado_legal+ factor(race), data = allRaceReg.data,
+                           index = c("id", "year"), model = "within", effect = "twoways")
+plm.allraces.MJ.reg <- plm(marijuana_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + 
+                               colorado_legal+ factor(race), data = allRaceReg.data,
+                           index = c("id", "year"), model = "within", effect = "twoways")
+
+plm.white.MJ.reg <- plm(marijuana_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + colorado_legal, 
+                        data = fullDataRaw.white, index=c("st_name", "year"), 
+                        model = "within", effect = "twoways")
+plm.white.DC.reg <- plm(drugcrime_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + colorado_legal, 
+                        data = fullDataRaw.white, index=c("st_name", "year"), 
+                        model = "within", effect = "twoways")
+plm.white.HC.reg <- plm(heroincoke_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + colorado_legal, 
+                        data = fullDataRaw.white, index=c("st_name", "year"), 
+                        model = "within", effect = "twoways")
+
+plm.black.DC.reg <- plm(drugcrime_ar ~ decrim_dummy + mmj + median_income +  bls_unemprate + colorado_legal, 
+                        data = fullDataRaw.black, index=c("st_name", "year"), 
+                        model = "within", effect = "twoways")
+plm.black.HC.reg <- plm(heroincoke_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + colorado_legal, 
+                        data = fullDataRaw.black, index=c("st_name", "year"), 
+                        model = "within", effect = "twoways")
+plm.black.MJ.reg <- plm(marijuana_ar ~ decrim_dummy + mmj + median_income + bls_unemprate + colorado_legal, 
+                        data = fullDataRaw.black, index=c("st_name", "year"), 
+                        model = "within", effect = "twoways")
+
+
+```
+
+```{r tidyData, echo = FALSE, cache=TRUE}
+tidyData.All <- gather(fullDataRaw.data, crimeType, arrestRate, 
+                       -(st_name:pct_poverty))
+
+# Modify crimeType to remove age indicator and AR
+tidyData.All <- mutate(tidyData.All, crimeType = 
+                       ifelse(grepl("drugcrime", tidyData.All$crimeType), "allDrugCrime", 
+                       ifelse(grepl("heroin", tidyData.All$crimeType), "heroin/cocaine", "marijuana")))
+
+# Create new variable with yes/no indicator for mmj and decriminalization
+tidyData.All <- mutate(tidyData.All, 
+                            decriminalization = ifelse(tidyData.All$decrim_dummy ==1, "yes", "no"))
+tidyData.All <- mutate(tidyData.All, 
+                            medicalMarijuana = ifelse(tidyData.All$mmj ==1, "yes", "no"))
+
+# Convert the marijuana and decriminalization variables to factor
+tidyData.All <- mutate(tidyData.All, 
+                            decriminalization = as.factor(decriminalization))
+tidyData.All <- mutate(tidyData.All, 
+                            medicalMarijuana = as.factor(medicalMarijuana))
+
+# rearrange columns into more logical order
+tidyData.All <- select(tidyData.All, year, st_name, race, crimeType, 
+                            arrestRate, decrim_dummy, mmj, decriminalization,  
+                            medicalMarijuana, median_income, lfpr)
+
+tidyData.White <- filter(tidyData.All, race == "White")
+tidyData.Black <- filter(tidyData.All, race == "Black")
+
+```
+\newpage
+```{r allRaceSumStats, echo = FALSE, results ='asis'}
+stargazer(select(fullDataRaw.data, drugcrime_ar:marijuana_ar), flip = TRUE, type ="latex", header = FALSE,
+          covariate.labels = c(" All Drug Arrests ", " Heroin/Cocaine Arrests ", " Marijuana Arrests "), 
+          title = "All Races Arrest Rates: Summary Statistics", summary.stat = c("mean" , "sd", "n" ))
+```
+
+```{r blackSumStats, echo = FALSE, results ='asis'}
+stargazer(select(fullDataRaw.black, drugcrime_ar:marijuana_ar), flip = TRUE, type ="latex", header = FALSE,
+          covariate.labels = c(" All Drug Arrests ", " Heroin/Cocaine Arrests ", " Marijuana Arrests "), 
+          title = "Black Arrest Rates: Summary Statistics", summary.stat = c("mean" , "sd","n" ))
+```
+
+```{r whiteSumStats, echo = FALSE, results ='asis'}
+stargazer(select(fullDataRaw.white, drugcrime_ar:marijuana_ar), flip = TRUE, type ="latex", header = FALSE,
+          covariate.labels = c(" All Drug Arrests ", " Heroin/Cocaine Arrests ", " Marijuana Arrests "), 
+          title = "White Arrest Rates: Summary Statistics", summary.stat = c("mean" , "sd","n" ))
+
+
+```
+
+
+
+\newpage
+```{r allDrugsRegTable, echo=FALSE, results='asis'}
+stargazer(plm.allraces.DC.reg,plm.white.DC.reg,plm.black.DC.reg,
+          type = 'latex',title =  "All Drugs Regressions", header = FALSE,
+          covariate.labels = c("Decriminalization Dummy", "MMJ Dummy", "Median Income",
+                               "Unemployment Rate", "Colorado Legal. Dummy"),
+          notes = "State/Year Fixed effects ommited from output",
+          dep.var.labels = "",
+          column.labels = c("All Races", "White", "Black"),
+          style = 'qje')
+```
+\newpage
+```{r marijuanaRegTable, echo=FALSE, results='asis'}
+stargazer(plm.allraces.MJ.reg,plm.white.MJ.reg,plm.black.MJ.reg,
+          type = 'latex',title =  "Marijuana Regressions", header = FALSE,
+          covariate.labels = c("Decriminalization Dummy", "MMJ Dummy", "Median Income",
+                               "Unemployment Rate", "Colorado Legal. Dummy"),
+          notes = "State/Year Fixed effects ommited from output",
+          dep.var.labels = "",
+          column.labels = c("All Races", "White", "Black"),
+          style = 'qje')
+```
+\newpage
+```{r heroincokeRegTable, echo=FALSE, results='asis'}
+stargazer(plm.allraces.HC.reg,plm.white.HC.reg,plm.black.HC.reg,
+          type = 'latex',title =  "Heroin/Cocaine Regressions", header = FALSE,
+          covariate.labels = c("Decriminalization Dummy", "MMJ Dummy", "Median Income:",
+                               "Unemployment Rate:", "Colorado Legal. Dummy"),
+          notes = "State/Year Fixed effects ommited from output",
+          dep.var.labels = "",
+          column.labels = c("All Races", "White", "Black"),
+          style = 'qje')
+```
+
+\newpage
+
+``` {r crimeMeans, echo = FALSE}
+
+Tidy.grouped.data <- group_by(tidyData.All, race, year, crimeType)
+
+# Create data with means of arrest
+crime.means.data <- summarize(Tidy.grouped.data, arrestRate = mean(arrestRate))
+
+# Subset into race data
+crime.means.white <-filter(crime.means.data, race == "White")
+crime.means.black <-filter(crime.means.data, race == "Black")
+crime.means.blkwht <-filter(crime.means.data, !(race == "Other"))
+```
+
+``` {r allCrimePlot, echo = FALSE, out.width ='1200Px', fig.asp = .66, dpi = 200}
+## ALL DC
+q1 <-ggplot(data = crime.means.blkwht, 
+            aes(x = year, y = arrestRate, color = race, group = race)) +
+            geom_point(aes(shape = race)) + geom_line() + facet_grid(.~crimeType) + 
+            scale_x_continuous(breaks = c(2004,2006,2008,2010, 2012,2014) ) +
+            labs( title = "Figure 1: Drug Crime Arrest Rates",
+                  y = "Arrest Rate\n (per 100,000 Inhabitants)") 
+         
+q1
+```
+
+``` {r heroinCrimePlot, echo = FALSE}
+## Just heroin
+q3c <- ggplot(data = filter(crime.means.blkwht, crimeType == "heroin/cocaine"), 
+              aes(x = year, y = arrestRate, color = race, group = race) ) + 
+              geom_point(aes(shape = race)) + geom_line() + facet_grid(race~., scales = "free") +
+              scale_x_continuous(breaks = c(2002, 2004, 2006, 2008, 2010, 2012, 2014) ) +
+              labs(title = "Figure 2: White and Black Heroine Arrest Rates",
+                   y = "Arrest Rate\n (per 100,000 Inhabitants)", x = "Year") +
+              coord_fixed(ratio = 2/3)
+q3c
+```
